@@ -1,4 +1,4 @@
-#Combination of two repo
+# Combination of two repo
 
 git clone https://github.com/ultralytics/yolov5
 
@@ -10,19 +10,19 @@ https://medium.com/analytics-vidhya/covid-19-face-mask-detection-using-yolov5-86
 Python interpreter: Python 3.7 (SCAN)
 
 
-###For yolov5 env setup:
+### For yolov5 env setup:
 
 pip install -U -r requirements.txt
 
 
-###Move VM files to local
+### Move VM files to local
 
 scp tiliter@52.249.194.76:yolov5/runs/train/exp2/weights/best.pt .
 
 scp -r tiliter@52.249.194.76:yolov5/runs/train/exp3 .
 
 
-###@VM
+### @VM
 * Training
 
 python train.py --batch 1 --epochs 200 --data ../mask-detection-dataset/data/data.yaml --cfg models/yolov5s.yaml --weights '' --device 0
@@ -31,7 +31,7 @@ python train.py --batch 1 --epochs 200 --data ../mask-detection-dataset/data/dat
 python detect.py --source ../mask-detection-dataset/data/images/maksssksksss787.png --weights runs/train/exp2/weights/best.pt
 
 
-###@local Mac
+### @local Mac
 * Testing 
 
 python detect.py --source data/street.mp4 --weights runs/train/exp2/weights/best.pt
