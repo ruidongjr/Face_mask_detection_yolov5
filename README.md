@@ -1,20 +1,41 @@
-Combination of two repo
+#Combination of two repo
 
 git clone https://github.com/ultralytics/yolov5
 
 git clone https://github.com/iAmEthanMai/mask-detection-dataset.git
 
-![CI CPU testing](https://github.com/ultralytics/yolov5/workflows/CI%20CPU%20testing/badge.svg)
+# Yolo v5
+https://medium.com/analytics-vidhya/covid-19-face-mask-detection-using-yolov5-8687e5942c81
 
-This repository represents Ultralytics open-source research into future object detection methods, and incorporates lessons learned and best practices evolved over thousands of hours of training and evolution on anonymized client datasets. **All code and models are under active development, and are subject to modification or deletion without notice.** Use at your own risk.
+Python interpreter: Python 3.7 (SCAN)
 
-<img src="https://user-images.githubusercontent.com/26833433/103594689-455e0e00-4eae-11eb-9cdf-7d753e2ceeeb.png" width="1000">** GPU Speed measures end-to-end time per image averaged over 5000 COCO val2017 images using a V100 GPU with batch size 32, and includes image preprocessing, PyTorch FP16 inference, postprocessing and NMS. EfficientDet data from [google/automl](https://github.com/google/automl) at batch size 8.
 
-- **January 5, 2021**: [v4.0 release](https://github.com/ultralytics/yolov5/releases/tag/v4.0): nn.SiLU() activations, [Weights & Biases](https://wandb.ai/) logging, [PyTorch Hub](https://pytorch.org/hub/ultralytics_yolov5/) integration.
-- **August 13, 2020**: [v3.0 release](https://github.com/ultralytics/yolov5/releases/tag/v3.0): nn.Hardswish() activations, data autodownload, native AMP.
-- **July 23, 2020**: [v2.0 release](https://github.com/ultralytics/yolov5/releases/tag/v2.0): improved model definition, training and mAP.
-- **June 22, 2020**: [PANet](https://arxiv.org/abs/1803.01534) updates: new heads, reduced parameters, improved speed and mAP [364fcfd](https://github.com/ultralytics/yolov5/commit/364fcfd7dba53f46edd4f04c037a039c0a287972).
-- **June 19, 2020**: [FP16](https://pytorch.org/docs/stable/nn.html#torch.nn.Module.half) as new default for smaller checkpoints and faster inference [d4c6674](https://github.com/ultralytics/yolov5/commit/d4c6674c98e19df4c40e33a777610a18d1961145).
+###For yolov5 env setup:
+
+pip install -U -r requirements.txt
+
+
+###Move VM files to local
+
+scp tiliter@52.249.194.76:yolov5/runs/train/exp2/weights/best.pt .
+
+scp -r tiliter@52.249.194.76:yolov5/runs/train/exp3 .
+
+
+###@VM
+* Training
+
+python train.py --batch 1 --epochs 200 --data ../mask-detection-dataset/data/data.yaml --cfg models/yolov5s.yaml --weights '' --device 0
+* Testing 
+
+python detect.py --source ../mask-detection-dataset/data/images/maksssksksss787.png --weights runs/train/exp2/weights/best.pt
+
+
+###@local Mac
+* Testing 
+
+python detect.py --source data/street.mp4 --weights runs/train/exp2/weights/best.pt
+
 
 
 ## Pretrained Checkpoints
