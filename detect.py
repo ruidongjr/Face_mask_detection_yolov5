@@ -1,3 +1,9 @@
+"""
+Measure the distance between two objects
+https://github.com/IntelRealSense/librealsense/issues/6544
+https://github.com/soarwing52/RealsensePython
+"""
+
 import argparse
 import time
 from pathlib import Path
@@ -8,17 +14,18 @@ import torch.backends.cudnn as cudnn
 from numpy import random
 
 from models.experimental import attempt_load
-from utils.datasets import LoadStreams, LoadImages
+from utils.datasets import LoadStreams, LoadImages, LoadRealSense2
 from utils.general import check_img_size, check_requirements, non_max_suppression, apply_classifier, scale_coords, \
-    xyxy2xywh, strip_optimizer, set_logging, increment_path
+    xyxy2xywh, strip_optimizer, set_logging, increment_path, calc_depth, calc_distancing
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 
 
 def detect(save_img=False):
+    distancing = False
     source, weights, view_img, save_txt, imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
-        ('rtsp://', 'rtmp://', 'http://'))
+        ('rtsp://', 'rtmp://', 'http://')) or source.lower().startswith('intel')
 
     # Directories
     save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
@@ -46,7 +53,11 @@ def detect(save_img=False):
     if webcam:
         view_img = True
         cudnn.benchmark = True  # set True to speed up constant image size inference
-        dataset = LoadStreams(source, img_size=imgsz)
+        if source.lower().startswith('intel'):
+            dataset = LoadRealSense2()
+            save_img = True
+        else:
+            dataset = LoadStreams(source, img_size=imgsz)
     else:
         save_img = True
         dataset = LoadImages(source, img_size=imgsz)
@@ -60,6 +71,7 @@ def detect(save_img=False):
     t0 = time.time()
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
+
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -82,16 +94,25 @@ def detect(save_img=False):
         # Process detections
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
-                p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
+                if source.lower().startswith('intel'):
+                    p, s, im0, frame = path, '%g: ' % i, im0s[i].copy(), dataset.count
+                else:
+                    p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
             else:
                 p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
 
             p = Path(p)  # to Path
             save_path = str(save_dir / p.name)  # img.jpg
             txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
+            # TODO  why two ROIs?
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             if len(det):
+                if type(vid_cap) is dict:  # dis dictionary
+                    depth, depth_scale, depth_intrin = vid_cap['distance'], \
+                                                       vid_cap['depth_scale'], \
+                                                       vid_cap['depth_intrin']
+
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
@@ -101,6 +122,7 @@ def detect(save_img=False):
                     s += f'{n} {names[int(c)]}s, '  # add to string
 
                 # Write results
+                distancing_list = []
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
@@ -110,7 +132,33 @@ def detect(save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+
+                        # calculate distance
+                        if type(vid_cap) is dict:  # dis dictionary
+                            xmin = int(xyxy[0])
+                            ymin = int(xyxy[1])
+                            xmax = int(xyxy[2])
+                            ymax = int(xyxy[3])
+
+                            # Calculating depth using CV2.Mean
+                            distance_in_meters = calc_depth(xmin, ymin, xmax, ymax, depth, depth_scale)# z axis
+
+                            if distancing:
+                                distancing_list.append((xmin, xmax, ymin, ymax, distance_in_meters))
+
+                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3,
+                                         dist=distance_in_meters)
+                        else:
+                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+
+                # compute distancing between objects
+                if distancing and len(distancing_list) > 1 and type(vid_cap) is dict:
+                    calc_distancing(distancing_list, depth_intrin)
+                    """
+                    https://github.com/IntelRealSense/librealsense/issues/2481
+                    https://github.com/IntelRealSense/librealsense/tree/master/examples/measure
+                    """
+
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -130,9 +178,13 @@ def detect(save_img=False):
                             vid_writer.release()  # release previous video writer
 
                         fourcc = 'mp4v'  # output video codec
-                        fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                        w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        if type(vid_cap) is dict:  # estimate distance_in_meters
+                            # TODO hard code
+                            w, h, fps = 640, 480, 6
+                        else:
+                            fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                            w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                            h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*fourcc), fps, (w, h))
                     vid_writer.write(im0)
 

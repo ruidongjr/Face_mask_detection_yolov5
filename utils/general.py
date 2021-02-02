@@ -516,3 +516,28 @@ def increment_path(path, exist_ok=True, sep=''):
         i = [int(m.groups()[0]) for m in matches if m]  # indices
         n = max(i) + 1 if i else 2  # increment number
         return f"{path}{sep}{n}"  # update path
+
+
+#Calculating Depth
+def calc_depth(xmin, ymin, xmax, ymax, depth, depth_scale):
+    # Crop depth data
+    depth = depth[ymin:ymax,xmin:xmax].astype(float)
+    # Get data scale from the device and convert to meters
+    depth = depth * depth_scale
+    xc = int((xmax - xmin)/2)
+    yc = int((ymax - ymin)/2)
+    dist = depth[yc, xc]  # get center of ROI
+    if dist == 0:
+        dist = cv2.mean(depth)[0]
+    return dist
+
+
+def calc_distancing(distancing_list, depth_intrin):
+    for dist in distancing_list:
+        (xmin, xmax, ymin, ymax, distance_in_meters) = dist
+        # TODO convert xmin into meters
+        for r in range(xmin, xmax, 2):
+            for c in range(ymin, ymax, 2):
+                depth = aligned_depth_frame.get_distance(c, r)
+                depth_point_in_meters_camera_coords = rs.rs2_deproject_pixel_to_point(depth_intrin, [c, r], depth)
+                print(depth_point_in_meters_camera_coords)

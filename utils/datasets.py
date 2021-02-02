@@ -20,6 +20,8 @@ from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+import pyrealsense2 as rs
+
 from utils.general import xyxy2xywh, xywh2xyxy, xywhn2xyxy, clean_str
 from utils.torch_utils import torch_distributed_zero_first
 
@@ -323,6 +325,139 @@ class LoadStreams:  # multiple IP or RTSP cameras
         img = np.ascontiguousarray(img)
 
         return self.sources, img, img0, None
+
+    def __len__(self):
+        return 0  # 1E12 frames = 32 streams at 30 FPS for 30 years
+
+
+class LoadRealSense2:  # Stream from Intel RealSense D435
+    """
+    https://github.com/GilbertTjahjono/Multiple_Object_Tracking
+    """
+    def __init__(self, width=640, height=480, fps=30):
+
+        # Variabels for setup
+        self.mode = 'RealSense'
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.imgs = [None]
+        self.depths = [None]
+        self.img_size = 416
+        self.half = False
+
+        # Setup
+        self.pipe = rs.pipeline()
+        self.cfg = rs.config()
+        self.cfg.enable_stream(rs.stream.depth, self.width, self.height, rs.format.z16, self.fps)
+        self.cfg.enable_stream(rs.stream.color, self.width, self.height, rs.format.bgr8, self.fps)
+
+        # Start streaming
+        self.profile = self.pipe.start(self.cfg)
+        self.path = rs.pipeline_profile()
+        print(self.path)
+
+        print("streaming at w = " + str(self.width) + " h = " + str(self.height) + " fps = " + str(self.fps))
+
+    def update(self):
+
+        while True:
+            #Wait for frames and get the data
+            self.frames = self.pipe.wait_for_frames()
+            self.depth_frame = self.frames.get_depth_frame()
+            self.color_frame = self.frames.get_color_frame()
+
+            if not self.depth_frame or not self.color_frame:
+                continue
+            img0 = np.asanyarray(self.color_frame.get_data())
+
+            #align + color depth -> for display purpose only
+            depth0 = self.colorizing(self.aligned(self.frames))
+
+            # aligned depth -> for depth calculation
+            distance0, depth_intrin = self.aligned_depth(self.frames)
+
+            #get depth_scale
+            depth_scale = self.scale(self.profile)
+
+            self.imgs = np.expand_dims(img0, axis=0)
+
+            self.depths = depth0
+            self.distance = distance0
+            break
+
+        #print("ini depth awal: " + str(np.shape(self.depths)))
+
+        s = np.stack([letterbox(x, new_shape=self.img_size)[0].shape for x in self.imgs], 0)  # inference shapes
+        #print("ini s: " + str(np.shape(s)))
+
+        self.rect = np.unique(s, axis=0).shape[0] == 1
+        #print("ini rect: " + str(np.shape(self.rect)))
+
+        if not self.rect:
+            print('WARNING: Different stream shapes detected. For optimal performance supply similarly-shaped streams.')
+
+        time.sleep(0.01)  # wait time
+        return self.rect, depth_scale, depth_intrin
+
+    def scale(self, profile):
+        depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
+        return depth_scale
+
+    def aligned_depth(self, frames):
+        self.align = rs.align(rs.stream.color)
+        frames = self.align.process(frames)
+        aligned_depth_frame = frames.get_depth_frame()
+        depth_real = np.asanyarray(aligned_depth_frame.get_data())
+
+        depth_intrin = aligned_depth_frame.profile.as_video_stream_profile().intrinsics
+
+        return depth_real, depth_intrin
+
+    def aligned(self, frames):
+        self.align = rs.align(rs.stream.color)
+        frames = self.align.process(frames)
+        aligned_depth_frame = frames.get_depth_frame()
+        return aligned_depth_frame
+
+    def colorizing(self, aligned_depth_frame):
+        self.colorizer = rs.colorizer()
+        colorized_depth = np.asanyarray(self.colorizer.colorize(aligned_depth_frame).get_data())
+        return(colorized_depth)
+
+    def __iter__(self):
+        self.count = -1
+        return self
+
+    def __next__(self):
+        self.count += 1
+        self.rect, depth_scale, depth_intrin = self.update()
+        img0 = self.imgs.copy()
+        depth = self.depths.copy()
+        distance = self.distance.copy()
+        if cv2.waitKey(1) == ord('q'):  # q to quit
+            cv2.destroyAllWindows()
+            raise StopIteration
+
+        img_path = 'realsense.mp4'
+
+        # Letterbox
+        img = [letterbox(x, new_shape=self.img_size, auto=self.rect)[0] for x in img0]
+        #print("ini img letterbox: " + str(np.shape(img)))
+
+        # Stack
+        img = np.stack(img, 0)
+        #print("ini img-padding: " + str(np.shape(img)))
+
+        # Convert Image
+        img = img[:, :, :, ::-1].transpose(0, 3, 1, 2)  # BGR to RGB, to 3x416x416, uint8 to float32
+        img = np.ascontiguousarray(img)
+
+        # Return depth, depth0, img, img0
+        dis = {'distance': distance,
+               'depth_scale': depth_scale,
+               'depth_intrin': depth_intrin}
+        return str(img_path), img, img0, dis
 
     def __len__(self):
         return 0  # 1E12 frames = 32 streams at 30 FPS for 30 years
