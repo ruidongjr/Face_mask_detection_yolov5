@@ -343,7 +343,7 @@ class LoadRealSense2:  # Stream from Intel RealSense D435
         self.fps = fps
         self.imgs = [None]
         self.depths = [None]
-        self.img_size = 416
+        self.img_size = 480
         self.half = False
 
         # Setup
@@ -375,7 +375,7 @@ class LoadRealSense2:  # Stream from Intel RealSense D435
             depth0 = self.colorizing(self.aligned(self.frames))
 
             # aligned depth -> for depth calculation
-            distance0, depth_intrin = self.aligned_depth(self.frames)
+            distance0, depth_intrin, aligned_depth_frame = self.aligned_depth(self.frames)
 
             #get depth_scale
             depth_scale = self.scale(self.profile)
@@ -398,7 +398,7 @@ class LoadRealSense2:  # Stream from Intel RealSense D435
             print('WARNING: Different stream shapes detected. For optimal performance supply similarly-shaped streams.')
 
         time.sleep(0.01)  # wait time
-        return self.rect, depth_scale, depth_intrin
+        return self.rect, depth_scale, depth_intrin, aligned_depth_frame
 
     def scale(self, profile):
         depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
@@ -412,7 +412,7 @@ class LoadRealSense2:  # Stream from Intel RealSense D435
 
         depth_intrin = aligned_depth_frame.profile.as_video_stream_profile().intrinsics
 
-        return depth_real, depth_intrin
+        return depth_real, depth_intrin, aligned_depth_frame
 
     def aligned(self, frames):
         self.align = rs.align(rs.stream.color)
@@ -431,7 +431,7 @@ class LoadRealSense2:  # Stream from Intel RealSense D435
 
     def __next__(self):
         self.count += 1
-        self.rect, depth_scale, depth_intrin = self.update()
+        self.rect, depth_scale, depth_intrin, aligned_depth_frame = self.update()
         img0 = self.imgs.copy()
         depth = self.depths.copy()
         distance = self.distance.copy()
@@ -456,7 +456,9 @@ class LoadRealSense2:  # Stream from Intel RealSense D435
         # Return depth, depth0, img, img0
         dis = {'distance': distance,
                'depth_scale': depth_scale,
-               'depth_intrin': depth_intrin}
+               'depth_intrin': depth_intrin,
+               'aligned_depth_frame': aligned_depth_frame
+               }
         return str(img_path), img, img0, dis
 
     def __len__(self):

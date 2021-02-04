@@ -17,13 +17,13 @@ from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages, LoadRealSense2
 from utils.general import check_img_size, check_requirements, non_max_suppression, apply_classifier, scale_coords, \
     xyxy2xywh, strip_optimizer, set_logging, increment_path, calc_depth, calc_distancing
-from utils.plots import plot_one_box
+from utils.plots import plot_one_box, plot_one_circle
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 
 
 def detect(save_img=False):
-    distancing = False
-    source, weights, view_img, save_txt, imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
+    source, weights, view_img, save_txt, imgsz, distancing = opt.source, opt.weights, opt.view_img, \
+                                                             opt.save_txt, opt.img_size, opt.distancing
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://')) or source.lower().startswith('intel')
 
@@ -109,9 +109,10 @@ def detect(save_img=False):
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             if len(det):
                 if type(vid_cap) is dict:  # dis dictionary
-                    depth, depth_scale, depth_intrin = vid_cap['distance'], \
-                                                       vid_cap['depth_scale'], \
-                                                       vid_cap['depth_intrin']
+                    depth, depth_scale, depth_intrin, aligned_depth_frame = vid_cap['distance'], \
+                                                                            vid_cap['depth_scale'], \
+                                                                            vid_cap['depth_intrin'], \
+                                                                            vid_cap['aligned_depth_frame']
 
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
@@ -153,7 +154,19 @@ def detect(save_img=False):
 
                 # compute distancing between objects
                 if distancing and len(distancing_list) > 1 and type(vid_cap) is dict:
-                    calc_distancing(distancing_list, depth_intrin)
+                    too_close = calc_distancing(distancing_list, depth_intrin, aligned_depth_frame)
+                    if len(too_close) > 0:
+                        print("Too close!!!!\n\n", too_close)
+
+                        for close_obj in too_close.keys():
+                            (obj1, obj2) = close_obj
+                            print(obj1, obj2)
+                            print(list(reversed(det))[obj1])
+                            print(list(reversed(det))[obj2])
+                            *xyxy1, _, _ = list(reversed(det))[obj1]
+                            print(xyxy1)
+                            xyxy2 = list(reversed(det))[obj2][0]
+                            plot_one_circle(xyxy1, im0, too_close[close_obj], line_thickness=4)
                     """
                     https://github.com/IntelRealSense/librealsense/issues/2481
                     https://github.com/IntelRealSense/librealsense/tree/master/examples/measure
@@ -213,6 +226,7 @@ if __name__ == '__main__':
     parser.add_argument('--project', default='runs/detect', help='save results to project/name')
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
+    parser.add_argument('--distancing', type=bool, default=False, help='detect social distancing')
     opt = parser.parse_args()
     print(opt)
     check_requirements()

@@ -71,6 +71,18 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None, dist=None)
                         lineType=cv2.LINE_AA)
 
 
+def plot_one_circle(x, img, dist, line_thickness=None):
+    # Plots one bounding circle on image img
+    tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
+    color = [255, 0, 0]  # red
+    xc = int((x[0]+x[2])/2)
+    yc = int(x[1])  # ymin  # int((x[1]+x[3])/2)
+    r = int((x[2]-x[0])/2)
+    cv2.circle(img, (xc, yc), r, color, thickness=tl, lineType=cv2.LINE_AA)
+    tf = max(tl - 1, 1)  # font thickness
+    cv2.putText(img, "{:.2f} m".format(dist), (xc+r+1, yc), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
+
 def plot_wh_methods():  # from utils.plots import *; plot_wh_methods()
     # Compares the two methods for width-height anchor multiplication
     # https://github.com/ultralytics/yolov3/issues/168

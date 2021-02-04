@@ -20,6 +20,8 @@ from utils.google_utils import gsutil_getsize
 from utils.metrics import fitness
 from utils.torch_utils import init_torch_seeds
 
+import pyrealsense2 as rs
+
 # Settings
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
@@ -531,13 +533,38 @@ def calc_depth(xmin, ymin, xmax, ymax, depth, depth_scale):
         dist = cv2.mean(depth)[0]
     return dist
 
+import itertools
+from math import sqrt
 
-def calc_distancing(distancing_list, depth_intrin):
+def calc_distancing(distancing_list, depth_intrin, aligned_depth_frame):
+    xc_in_meters = []
+    yc_in_meters = []
+    zc_in_meters = []
     for dist in distancing_list:
         (xmin, xmax, ymin, ymax, distance_in_meters) = dist
-        # TODO convert xmin into meters
-        for r in range(xmin, xmax, 2):
-            for c in range(ymin, ymax, 2):
+        # TODO convert the center of ROI (x, y, z) into meters
+        x_in_meters = []
+        y_in_meters = []
+        z_in_meters = []
+        for r in range(ymin, ymax, 2):
+            for c in range(xmin, xmax, 2):
                 depth = aligned_depth_frame.get_distance(c, r)
                 depth_point_in_meters_camera_coords = rs.rs2_deproject_pixel_to_point(depth_intrin, [c, r], depth)
-                print(depth_point_in_meters_camera_coords)
+                x_in_meters.append(depth_point_in_meters_camera_coords[0])
+                y_in_meters.append(depth_point_in_meters_camera_coords[1])
+                z_in_meters.append(depth_point_in_meters_camera_coords[2])
+        xc_in_meters.append(sum(x_in_meters) / len(x_in_meters))  # mean of x_in_meters
+        yc_in_meters.append(sum(y_in_meters) / len(y_in_meters))  # mean of y_in_meters
+        zc_in_meters.append(sum(z_in_meters) / len(z_in_meters))  # mean of z_in_meters
+
+    # compute distancing between two objects
+    too_close = {}
+    dist_iter = list(range(len(distancing_list)))
+    for pair in list(itertools.combinations(dist_iter, 2)):
+        (idx1, idx2) = pair
+        distance_in_meters_2objects = sqrt(pow(xc_in_meters[idx1] - xc_in_meters[idx2], 2) +
+                                           pow(yc_in_meters[idx1] - yc_in_meters[idx2], 2) +
+                                           pow(zc_in_meters[idx1] - zc_in_meters[idx2], 2))
+        if distance_in_meters_2objects < 1:
+            too_close[pair] = distance_in_meters_2objects
+    return too_close
