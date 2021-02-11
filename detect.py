@@ -240,7 +240,7 @@ if __name__ == '__main__':
     parser.add_argument('--jetson', type=bool, default=False, help='use Jetson nano')
     opt = parser.parse_args()
     print(opt)
-    check_requirements()
+    # check_requirements()
 
     with torch.no_grad():
         if opt.update:  # update all models (to fix SourceChangeWarning)

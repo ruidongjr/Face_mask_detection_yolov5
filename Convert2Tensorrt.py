@@ -1,10 +1,8 @@
-import torch
-from utils.torch_utils import select_device
-import onnx
-
-ONNX_FILE_PATH = 'runs/train/exp2/weights/best.onnx'
-onnx_model = onnx.load(ONNX_FILE_PATH)
-onnx.checker.check_model(onnx_model)
+# import onnx
+#
+# ONNX_FILE_PATH = 'runs/train/exp2/weights/best.onnx'
+# onnx_model = onnx.load(ONNX_FILE_PATH)
+# onnx.checker.check_model(onnx_model)
 
 import os, sys
 import numpy as np
