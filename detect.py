@@ -19,11 +19,13 @@ from utils.general import check_img_size, check_requirements, non_max_suppressio
     xyxy2xywh, strip_optimizer, set_logging, increment_path, calc_depth, calc_distancing
 from utils.plots import plot_one_box, plot_one_circle
 from utils.torch_utils import select_device, load_classifier, time_synchronized
+from Convert2Tensorrt import JetsonInferenceEngine, fromOnnx2TensorRtEngine
 
 
 def detect(save_img=False):
-    source, weights, view_img, save_txt, imgsz, distancing = opt.source, opt.weights, opt.view_img, \
-                                                             opt.save_txt, opt.img_size, opt.distancing
+    source, weights, view_img, save_txt, imgsz, distancing, jetson = opt.source, opt.weights, opt.view_img, \
+                                                                     opt.save_txt, opt.img_size, \
+                                                                     opt.distancing, opt.jetson
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://')) or source.lower().startswith('intel')
 
@@ -37,7 +39,15 @@ def detect(save_img=False):
     half = device.type != 'cpu'  # half precision only supported on CUDA
 
     # Load model
-    model = attempt_load(weights, map_location=device)  # load FP32 model
+    if jetson:
+        """
+        1. convert to .onnx <python models/export.py --weights runs/train/exp2/weights/best.pt --img 640 --batch 1>
+        2. save .jet engine into the same dir as 'weights'
+        """
+        fromOnnx2TensorRtEngine(weights.split('.pt')[0])
+        model = JetsonInferenceEngine(weights.split('.pt')[0] + '.jet')
+    else:
+        model = attempt_load(weights, map_location=device)  # load FP32 model
     imgsz = check_img_size(imgsz, s=model.stride.max())  # check img_size
     if half:
         model.half()  # to FP16
@@ -227,6 +237,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--distancing', type=bool, default=False, help='detect social distancing')
+    parser.add_argument('--jetson', type=bool, default=False, help='use Jetson nano')
     opt = parser.parse_args()
     print(opt)
     check_requirements()
