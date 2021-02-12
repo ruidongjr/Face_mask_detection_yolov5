@@ -44,8 +44,8 @@ def detect(save_img=False):
         1. convert to .onnx <python models/export.py --weights runs/train/exp2/weights/best.pt --img 640 --batch 1>
         2. save .jet engine into the same dir as 'weights'
         """
-        fromOnnx2TensorRtEngine(weights.split('.pt')[0])
-        model = JetsonInferenceEngine(weights.split('.pt')[0] + '.jet')
+        fromOnnx2TensorRtEngine(weights[0].split('.pt')[0])
+        model = JetsonInferenceEngine(weights[0].split('.pt')[0] + '.jet')
     else:
         model = attempt_load(weights, map_location=device)  # load FP32 model
     imgsz = check_img_size(imgsz, s=model.stride.max())  # check img_size
