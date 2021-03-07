@@ -536,7 +536,7 @@ def calc_depth(xmin, ymin, xmax, ymax, depth, depth_scale):
 import itertools
 from math import sqrt
 
-def calc_distancing(distancing_list, depth_intrin, aligned_depth_frame):
+def calc_distancing(distancing_list, depth_intrin, aligned_depth_frame, distancing_threshold=1):
     xc_in_meters = []
     yc_in_meters = []
     zc_in_meters = []
@@ -565,6 +565,6 @@ def calc_distancing(distancing_list, depth_intrin, aligned_depth_frame):
         distance_in_meters_2objects = sqrt(pow(xc_in_meters[idx1] - xc_in_meters[idx2], 2) +
                                            pow(yc_in_meters[idx1] - yc_in_meters[idx2], 2) +
                                            pow(zc_in_meters[idx1] - zc_in_meters[idx2], 2))
-        if distance_in_meters_2objects < 1:
+        if distance_in_meters_2objects < distancing_threshold:
             too_close[pair] = distance_in_meters_2objects
     return too_close

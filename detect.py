@@ -19,7 +19,7 @@ from utils.general import check_img_size, check_requirements, non_max_suppressio
     xyxy2xywh, strip_optimizer, set_logging, increment_path, calc_depth, calc_distancing
 from utils.plots import plot_one_box, plot_one_circle
 from utils.torch_utils import select_device, load_classifier, time_synchronized
-from Convert2Tensorrt import JetsonInferenceEngine, fromOnnx2TensorRtEngine
+# from Convert2Tensorrt import JetsonInferenceEngine, fromOnnx2TensorRtEngine
 
 
 def detect(save_img=False):
@@ -114,7 +114,6 @@ def detect(save_img=False):
             p = Path(p)  # to Path
             save_path = str(save_dir / p.name)  # img.jpg
             txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
-            # TODO  why two ROIs?
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             if len(det):
@@ -220,7 +219,7 @@ def detect(save_img=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='yolov5s.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='weights/best.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='data/images', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
